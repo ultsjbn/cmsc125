@@ -1,2 +1,2 @@
 # cmsc125
-Library for CMSC 125 exercises and projects.
+Library for CMSC 125 (Operating Systems) exercises and projects.
