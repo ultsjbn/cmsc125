@@ -1,3 +1,12 @@
+/* 
+ * CMSC 125 - Dining Philosophers Problem Code Implementation
+ * Final Project for CMSC 125 (Operating Systems)
+ * Dyoco, Ito, Lopez, Novesteras
+ * May 14, 2026
+ *
+ */ 
+
+/* Include headers */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -6,18 +15,29 @@
 #include <pthread.h>
 #include <semaphore.h>
  
-/* Configuration*/
-#define NUM_PHILOSOPHERS     5
+/* Configuration */
+/* Number of Philosphers = 5 */
+#define NUM_PHILOSOPHERS 5
+/* Meals each philospher eats */
 #define MEALS_PER_PHILOSOPHER 3
-#define THINK_TIME_MAX       2   /* Max seconds thinking */
-#define EAT_TIME_MAX         2   /* Max seconds eating   */
- 
-/*Philosopher states*/
-typedef enum { THINKING, HUNGRY, EATING, DONE } State;
+/* Maximum seconds thinking for each philosopher */
+#define THINK_TIME_MAX 2 
+/* Maximum seconds eating for each philosopher */
+#define EAT_TIME_MAX 2
+/* Behavior states for each philosopher */
+typedef enum {
+  THINKING,
+  HUNGRY,
+  EATING,
+  DONE
+} State;
  
 /* Shared synchronization primitives */
-sem_t chopstick[NUM_PHILOSOPHERS]; /* One semaphore per chopstick  */
-sem_t room;                        /* Room: at most N-1 inside     */
+
+/* One semaphore per chopstick */
+sem_t chopstick[NUM_PHILOSOPHERS];
+/* Room: at most N-1 inside */
+sem_t room;
  
 /* Logging mutex */
 pthread_mutex_t log_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -27,22 +47,23 @@ State philosopher_state[NUM_PHILOSOPHERS];
  
 /* ANSI color codes */
 static const char *COLORS[] = {
-	"\033[1;31m",  /* Red     */
-	"\033[1;32m",  /* Green   */
-	"\033[1;33m",  /* Yellow  */
-	"\033[1;34m",  /* Blue    */
-	"\033[1;35m",  /* Magenta */
+	"\033[1;31m", /* Red */
+	"\033[1;32m", /* Green */
+	"\033[1;33m", /* Yellow */
+	"\033[1;34m", /* Blue */
+	"\033[1;35m", /* Magenta */
 };
+
 static const char *RESET = "\033[0m";
  
 /* Helper: timestamp string*/
 void get_timestamp(char *buf, size_t size) {
-	time_t now = time(NULL);
+  time_t now = time(NULL);
 	struct tm *t = localtime(&now);
 	strftime(buf, size, "%H:%M:%S", t);
 }
  
-/*Helper: log a message*/
+/* Helper: log a message */
 void log_msg(int id, const char *msg) {
 	char ts[16];
 	get_timestamp(ts, sizeof(ts));
@@ -52,16 +73,16 @@ void log_msg(int id, const char *msg) {
 	pthread_mutex_unlock(&log_mutex);
 }
  
-/*Helper: print state table*/
+/* Helper: print state table */
 void print_state_table(void) {
 	pthread_mutex_lock(&log_mutex);
 	printf("\n  State Table: ");
 	for (int i = 0; i < NUM_PHILOSOPHERS; i++) {
 		switch (philosopher_state[i]) {
-			case THINKING: printf("[P%d:THINK]  ", i); break;
-			case HUNGRY:   printf("[P%d:HUNGRY] ", i); break;
-			case EATING:   printf("[P%d:EAT]    ", i); break;
-			case DONE:     printf("[P%d:DONE]   ", i); break;
+			case THINKING: printf("[Philosopher %d: THINK]\n", i); break;
+      case HUNGRY: printf("[Philosopher %d: HUNGRY]\n", i); break;
+			case EATING: printf("[Philosopher %d: EAT]\n", i); break;
+			case DONE: printf("[Philosopher %d: DONE]\n", i); break;
 		}
 	}
 	printf("\n\n");
@@ -70,14 +91,14 @@ void print_state_table(void) {
  
 /* Philosopher thread function */
 void *philosopher(void *arg) {
-	int id    = *(int *)arg;
-	int left  = id;
+	int id = *(int *)arg;
+	int left = id;
 	int right = (id + 1) % NUM_PHILOSOPHERS;
 	char msg[64];
  
 	for (int meal = 0; meal < MEALS_PER_PHILOSOPHER; meal++) {
  
-		/*THINKING */
+		/* THINKING */
 		philosopher_state[id] = THINKING;
 		int think_time = (rand() % THINK_TIME_MAX) + 1;
 		snprintf(msg, sizeof(msg), "is THINKING for %ds...", think_time);
@@ -85,7 +106,7 @@ void *philosopher(void *arg) {
 		print_state_table();
 		sleep(think_time);
  
-		/*HUNGRY: enter room*/
+		/* HUNGRY: enter room */
 		philosopher_state[id] = HUNGRY;
 		log_msg(id, "is HUNGRY -- waiting to enter the room");
 		sem_wait(&room);   /* Only N-1 may attempt at once */
@@ -125,7 +146,7 @@ void *philosopher(void *arg) {
 		print_state_table();
 		sleep(eat_time);
  
-		/*PUT DOWN CHOPSTICKS */
+		/* PUT DOWN CHOPSTICKS */
 		sem_post(&chopstick[left]);
 		sem_post(&chopstick[right]);
 		log_msg(id, "puts down both chopsticks");
