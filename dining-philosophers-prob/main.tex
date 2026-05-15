@@ -1,0 +1,546 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{pgfplots}
+\usepackage{tikz}
+\usepackage[margin=0.5in]{geometry}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{caption}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{multicol}
+\usepackage[colorlinks=true, 
+            linkcolor=blue,
+            urlcolor=blue,
+            citecolor=blue,
+            filecolor=blue]{hyperref}
+\usepackage{tcolorbox}
+\usepackage{parskip}
+\usepackage[style=ieee]{biblatex}
+\addbibresource{ref.bib}
+
+\setlength{\columnsep}{0.3in}
+
+\pgfplotsset{compat=1.18}
+
+% Code listing style
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+\definecolor{inlinegray}{rgb}{0.85,0.85,0.85}
+
+\newcommand{\code}[1]{\tcbox[on line, boxsep=1pt, left=1pt, right=1pt, top=1pt, bottom=1pt, colback=inlinegray, colframe=inlinegray, fontupper=\ttfamily\small]{#1}}
+
+\lstdefinestyle{mystyle}{
+    language=C,
+    backgroundcolor=\color{backcolour},   
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{magenta},
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,         
+    breaklines=true,                 
+    captionpos=b,                    
+    keepspaces=true,                 
+    numbers=left,                    
+    numbersep=10pt,
+    showspaces=false,                
+    showstringspaces=false,
+    showtabs=false,                  
+    tabsize=4,
+    xleftmargin=15pt,
+    framexleftmargin=15pt,
+    frame=single,
+    rulecolor=\color{inlinegray}
+}
+
+\lstset{style=mystyle}
+
+\title{\textbf{Dining Philosophers Problem}\\
+\large CMSC 125 - Operating Systems}
+\author{Group 4: Dyoco, Ito, Lopez, Novesteras}
+\date{May 14, 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+The Dining Philosophers Problem is a classical synchronization problem that demonstrates the challenges of allocating shared resources among multiple processes without causing deadlocks or starvation. This project implements a simulation in C utilizing POSIX threads, semaphores, and mutexes, successfully addressing these concurrency issues through the Room Semaphore (N-1 Rule) and Asymmetric Resource Sharing.
+\end{abstract}
+
+\vspace{0.5cm}
+
+\begin{multicols*}{2}
+
+% -------------------------------------- 1. INTRODUCTION --------------------------------------
+\section{Introduction}
+The Dining Philosophers Problem was proposed by Edsger Dijkstra in 1965. It is a classical problem in concurrent programming that illustrates the issues of sharing resources, avoiding deadlock, and coordinating processes in multi-threaded systems \cite{geeks_problem}.
+
+It simulates a problem where several processes, in this case, philosophers, split limited shared resources (chopsticks) sitting around a circular table. Every philosopher will alternate between thinking and eating, having to acquire two shared chopsticks (left and right) in order to eat \cite{dining_theory}.
+
+This problem is often used to illustrate:
+\begin{itemize}
+    \item Mutual exclusion in critical sections
+    \item Deadlock conditions and prevention strategies
+    \item Starvation and fairness in scheduling
+    \item Efficient resource utilization in concurrent systems
+\end{itemize}
+
+The code is written in the C programming language and uses POSIX threads (\code{pthread}), semaphores (\code{sem\_t}), mutex locks (\code{pthread\_mutex}), and synchronous logging to simulate and solve the synchronization problem. This system includes two deadlock prevention techniques: the Room Semaphore (N-1 Rule) and Asymmetrical Resource Sharing \cite{downey2016}.
+
+% --------------------------------- 2.  PROBLEM STATEMENT ---------------------------------
+\section{Problem Statement}
+The Dining Philosopher problem has a concept that $N$ philosophers are sitting around a circular table. Each philosopher alternates between thinking and eating states. Each philosopher needs two chopsticks to be able to eat, one left and one right.
+
+The problem is that the number of chopsticks is equal to the number of philosophers, and each chopstick is placed between two neighboring philosophers. If the chopsticks are not synchronized properly, there can be many issues related to concurrency, such as deadlock, starvation, and race conditions.
+
+The main goal of the system is to ensure that:
+\begin{itemize}
+    \item Multiple philosophers may execute concurrently.
+    \item Shared chopsticks are safely synchronized.
+    \item Deadlock and starvation are prevented.
+    \item Mutual exclusion is maintained.
+\end{itemize}
+
+\subsection{Constraints and Conditions}
+\begin{itemize}
+    \item Each philosopher needs two chopsticks to eat.
+    \item Each philosopher may only pick one chopstick at a time.
+    \item Philosophers alternate between \code{THINKING}, \code{HUNGRY}, \code{EATING}, and \code{DONE} states.
+    \item The number of chopsticks is equal to the number of philosophers.
+    \item The system must avoid race conditions.
+    \item Console output must remain synchronized between threads.
+    \item At most $N-1$ philosophers may attempt to eat simultaneously.
+\end{itemize}
+
+% --------------------------- 3. SYSTEM DESIGN AND SOLUTION ANALYSIS ---------------------------
+\section{System Design and Solution Analysis}
+To create a concurrent multi-threaded simulation of the Dining Philosophers Problem using POSIX threads (\code{pthread}), semaphores (\code{sem\_t}), mutexes, and synchronized console logging, we have used an independent thread for each philosopher and a binary semaphore to represent each chopstick (which is shared between two neighboring philosophers) \cite{geeks_semaphore}. The main goal of this implementation is to ensure safe synchronization and resource sharing while preventing deadlock, starvation, and avoiding race conditions.
+
+% -------------------------------- 3.1 Mutual Exclusion Using Binary Semaphores
+\subsection{Mutual Exclusion Using Binary Semaphores}
+To implement mutual exclusion, binary semaphores were used to create a semaphore for each chopstick. There will be a semaphore initialized to 1 for each chopstick, thus allowing only one philosopher to possess a chopstick at a given time.
+
+\begin{lstlisting}[language=C, caption=Semaphore Initialization]
+sem_init(&room, 0, NUM_PHILOSOPHERS - 1);
+for (int i = 0; i < NUM_PHILOSOPHERS; i++) {
+    sem_init(&chopstick[i], 0, 1);
+}
+\end{lstlisting}
+
+In order for each philosopher to access both chopsticks when they are ready to eat, they must execute a successful \code{sem\_wait()} on both of their neighboring chopsticks before entering the \code{EATING} state.
+
+\begin{lstlisting}[language=C, caption=Acquiring Chopsticks]
+sem_wait(&chopstick[left]);
+sem_wait(&chopstick[right]);
+\end{lstlisting}
+
+Since acquiring a semaphore is atomic, it guarantees that only one philosopher will be able to access a chopstick at one time, and therefore prevents race conditions while accessing resources.
+
+% -------------------------------- 3.2 The Room Semaphore (N-1 Rule)
+\subsection{The Room Semaphore ($N-1$ Rule)}
+The Room Semaphore approach, or $N-1$ Rule, is the first strategy used by the system to prevent deadlock. The system creates a counting semaphore called \code{room}, which starts at \code{NUM\_PHILOSOPHERS - 1} \cite{downey2016}.
+
+\begin{lstlisting}[language=C, caption=Room Semaphore Initialization]
+sem_init(&room, 0, NUM_PHILOSOPHERS - 1);
+\end{lstlisting}
+
+In order to pick up chopsticks, each philosopher must access the room before they can do so.
+
+\begin{lstlisting}[language=C, caption=Entering the Room]
+sem_wait(&room);
+\end{lstlisting}
+
+When the philosopher has finished eating and has released their chopsticks, they leave the room.
+
+\begin{lstlisting}[language=C, caption=Leaving the Room]
+sem_post(&room);
+\end{lstlisting}
+
+The mechanism ensures that no more than $N-1$ philosophers will ever be attempting to eat at the same time, because at least one philosopher will always be outside of the room, allowing them to successfully acquire both chopsticks, thus preventing circular wait and deadlock.
+
+% -------------------------------- 3.3 Deadlock Prevention Using the Room Semaphore (N-1 Rule)
+\subsection{Asymmetric Resource Sharing}
+The implementation of Asymmetric Resource Sharing (or asymmetric ordering) is the second strategy used to prevent deadlock in this situation. Even-numbered philosophers acquire chopsticks in LEFT-to-RIGHT order, while odd-numbered philosophers acquire chopsticks in RIGHT-to-LEFT order.
+
+\begin{lstlisting}[language=C, caption=Asymmetric Chopstick Acquisition]
+if (id % 2 == 0) {
+    sem_wait(&chopstick[left]);
+    sem_wait(&chopstick[right]);
+} else {
+    sem_wait(&chopstick[right]);
+    sem_wait(&chopstick[left]);
+}
+\end{lstlisting}
+
+This implementation gives a non-uniform (asymmetrical) way for all philosophers to order their requests for resources (chopsticks), which breaks the circular wait condition that is created by all philosophers requesting resources in a uniform order. Since not all the philosophers will request their resources in the same order, this will also help to prevent the cyclic dependencies that lead to deadlocks.
+
+\subsection{Philosopher State Management}
+The design adds an enumeration type (\code{enum}) to allow for an explicit representation of the current state of each philosopher to improve observability and simulation clarity.
+
+\begin{lstlisting}[language=C, caption=State Enumeration]
+typedef enum {
+    THINKING,
+    HUNGRY,
+    EATING,
+    DONE
+} State;
+\end{lstlisting}
+
+Each philosopher updates its current state throughout execution:
+\begin{lstlisting}[language=C, caption=State Updates]
+philosopher_state[id] = THINKING;
+philosopher_state[id] = HUNGRY;
+philosopher_state[id] = EATING;
+philosopher_state[id] = DONE;
+\end{lstlisting}
+
+A synchronized state table will be displayed at periodic intervals to allow the current state of each philosopher to be viewed during the execution of the program. This improves the ability to trace and debug concurrent execution.
+
+\subsection{Thread Synchronization and Logging}
+Because multiple threads can try to print output at the same time, the \code{log\_mutex} is used to manage synchronized access to the console.
+
+\begin{lstlisting}[language=C, caption=Synchronized Logging]
+pthread_mutex_lock(&log_mutex);
+printf(...);
+pthread_mutex_unlock(&log_mutex);
+\end{lstlisting}
+
+This ensures that the console messages and state tables will print automatically without overlapping or corrupting data. The implementation also includes:
+\begin{itemize}
+    \item Colored philosopher outputs using ANSI color codes.
+    \item Timestamped logging for event tracing.
+    \item Structured state visualization for monitoring philosopher activity.
+\end{itemize}
+These features create improvements for readability, debugging, and analysis of concurrent behaviours.
+
+\subsection{Concurrency and Parallel Execution}
+Philosophers are implemented as separate threads using POSIX threads.
+
+\begin{lstlisting}[language=C, caption=Thread Creation]
+pthread_t threads[NUM_PHILOSOPHERS];
+    int ids[NUM_PHILOSOPHERS];
+
+    for (int i = 0; i < NUM_PHILOSOPHERS; i++) {
+        ids[i] = i;
+        if (pthread_create(&threads[i], NULL, philosopher, &ids[i]) != 0) {
+            perror("pthread_create");
+            exit(EXIT_FAILURE);
+        }
+    }
+\end{lstlisting}
+
+Philosophers will think, wait, and eat concurrently according to the operating system's scheduling policy rather than sequentially. The implementation will simulate a realistic concurrent execution environment where dynamic resource availability determines the order of execution.
+
+\subsection{CPU Efficiency and Controlled Delays}
+The implementation will randomize both thinking and eating durations using \code{sleep()} calls with random time values produced using the \code{rand()} function.
+
+\begin{lstlisting}[language=C, caption=Randomized Execution Times]
+int think_time = (rand() % THINK_TIME_MAX) + 1;
+int eat_time = (rand() % EAT_TIME_MAX) + 1;
+\end{lstlisting}
+
+This provides a more realistic concurrent execution behavior, reduced CPU overutilization, and improved schedling variability during simulation. Additionally, compile-time constraints on randomization ensure safe upper and lower limits to randomization:
+
+\begin{lstlisting}[language=C, caption=Compile-time Safety Checks]
+#if THINK_TIME_MAX < 1 || EAT_TIME_MAX < 1
+#error "THINK_TIME_MAX and EAT_TIME_MAX must each be at least 1."
+#endif
+\end{lstlisting}
+
+This will prevent undefined behaviour due to incorrect application modulo operations.
+
+% -------------------------------- 4. CONCLUSION --------------------------------
+\section{Conclusion}
+The Dining Philosophers simulation provides an excellent example of both the problems associated with concurrency and possible solutions to these problems, particularly from the perspective of shared resource management among numerous threads. Through the use of semaphores and mutexes, the overall system provides for safe coordination between the philosophers while also providing correctness in a concurrent execution environment.
+
+The implementation effectively enforces mutual exclusion when the use of binary semaphores ensures that no more than one of the philosophers can use each of the chopsticks simultaneously. Deadlocks and starvation are prevented by using both the Room Semaphore and the Asymmetrical Resource Sharing strategies which together prevent circular waiting conditions and assure safe concurrent resource allocation.
+
+The system further improves observability and usability through philosopher state tracking, timestamped logging, colored synchronized console output, and runtime state table visualization. The ability to use independent POSIX threads allows for the simulation of real concurrent execution by providing the use of thinking and eating times that are randomly generated to provide a more realistic CPU utilization and to allow natural scheduling variation.
+
+Overall, the Dining Philosopher's Problem has been successfully resolved by implementing a robust, efficient, and practical synchronization solution addressing the real-world use of semaphores, mutexes, deadlock resolution strategies, and the principles of multi-threaded programming.
+
+\end{multicols*}
+
+\newpage
+\section{Full Program Implementation}
+\begin{lstlisting}[language=C, caption= Dining Philosophers Full Program Implementation]
+/*
+	CMSC 125 - Dining Philosophers Problem
+	Final Project for CMSC 125 (Operating Systems)
+	Dyoco, Ito, Lopez, Novesteras
+	May 14, 2026
+
+	Compile: gcc dpp.c -o dpp
+	Run: ./dpp
+
+	Deadlock Prevention Strategies Used:
+	1. Room Semaphore (N-1 Rule):
+		At most N-1 philosophers may attempt to eat at once.
+		This guarantees at least one philosopher can always acquire
+		both chopsticks, making circular wait impossible.
+
+	2. Asymmetric Resource Ordering:
+		Even-numbered philosophers pick up LEFT then RIGHT.
+		Odd-numbered philosophers pick up RIGHT then LEFT.
+		This breaks the symmetry that causes circular wait.
+*/
+
+/* ------------ Headers ------------ */
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <time.h>
+#include <pthread.h>
+#include <semaphore.h>
+
+/* ------------ Configuration ------------ */
+
+/* Number of philosophers (and chopsticks) at the table */
+#define NUM_PHILOSOPHERS 5
+/* How many meals each philosopher eats before leaving */
+#define MEALS_PER_PHILOSOPHER 3
+/* Maximum thinking time in seconds (actual = 1 to THINK_TIME_MAX) */
+#define THINK_TIME_MAX 4
+/* Maximum eating time in seconds (actual = 1 to EAT_TIME_MAX) */
+#define EAT_TIME_MAX 3
+
+/* TIME_MAX values must be at least 1 to avoid undefined behavior from rand() % 0 */
+#if THINK_TIME_MAX < 1 || EAT_TIME_MAX < 1
+#error "THINK_TIME_MAX and EAT_TIME_MAX must each be at least 1."
+#endif
+
+/* ------------ State Enum ------------ */
+typedef enum {
+	THINKING, /* Philosopher is thinking, not competing for chopsticks */
+	HUNGRY,   /* Philosopher wants to eat, waiting to enter room */
+	EATING,   /* Philosopher holds both chopsticks and is eating */
+	DONE      /* Philosopher has finished all meals */
+} State;
+
+/* ------------ Shared Synchronization Primitives ------------ */
+
+/* chopstick[i]: Binary semaphore representing the chopstick between philosopher i and (i+1)%N. */
+sem_t chopstick[NUM_PHILOSOPHERS];
+
+/* room: Counting semaphore initialized to N-1. */
+sem_t room;
+
+/* log_mutex: Protects both console output and philosopher_state[]. */
+pthread_mutex_t log_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+/* philosopher_state[]: Tracks the current state of each philosopher. */
+State philosopher_state[NUM_PHILOSOPHERS];
+
+/* ------------ ANSI Color Codes ------------ */
+static const char *COLORS[] = {
+	"\033[1;31m", /* Philosopher 0: Red */
+	"\033[1;32m", /* Philosopher 1: Green */
+	"\033[1;33m", /* Philosopher 2: Yellow */
+	"\033[1;34m", /* Philosopher 3: Blue */
+	"\033[1;35m", /* Philosopher 4: Magenta */
+};
+
+static const char *RESET = "\033[0m";
+
+/* ------------ Helper: Timestamp ------------ */
+static void get_timestamp(char *buf, size_t size) {
+	time_t now = time(NULL);
+	struct tm *t = localtime(&now);
+	strftime(buf, size, "%H:%M:%S", t);
+}
+
+/* ------------ Helper: Log a Message ------------ */
+static void log_msg(int id, const char *msg) {
+	char ts[16];
+	get_timestamp(ts, sizeof(ts));
+
+	pthread_mutex_lock(&log_mutex);
+	printf("[%s] %sPhilosopher %d%s | %s\n",
+		   ts, COLORS[id], id, RESET, msg);
+	pthread_mutex_unlock(&log_mutex);
+}
+
+/* ------------ Helper: Print State Table ------------ */
+static void print_state_table(void) {
+	pthread_mutex_lock(&log_mutex);
+
+	printf("\n  +-- State Table -----------+\n");
+	for (int i = 0; i < NUM_PHILOSOPHERS; i++) {
+		const char *label;
+		switch (philosopher_state[i]) {
+			case THINKING: label = "THINKING"; break;
+			case HUNGRY: label = "HUNGRY";   break;
+			case EATING: label = "EATING";   break;
+			case DONE: label = "DONE";     break;
+			default: label = "UNKNOWN";  break;
+		}
+		printf("  | %sPhilosopher %d%s : %-8s |\n", COLORS[i], i, RESET, label);
+	}
+		
+	printf("  +--------------------------+\n\n");
+	pthread_mutex_unlock(&log_mutex);
+}
+
+/* ------------ Philosopher Thread Function ------------ */
+/*
+	Each philosopher runs this function as its own thread.
+	The philosopher cycles through MEALS_PER_PHILOSOPHER iterations of:
+	Think -> Get hungry -> Enter room -> Pick up chopsticks -> Eat -> Put down chopsticks -> Leave room
+	arg: pointer to the philosopher's integer ID (0 to N-1)
+ */
+void *philosopher(void *arg) {
+	int id = *(int *)arg;
+	int left = id; /* Chopstick to this philosopher's left  */
+	int right = (id + 1) % NUM_PHILOSOPHERS; /* Chopstick to this philosopher's right */
+	char msg[80];
+
+	for (int meal = 0; meal < MEALS_PER_PHILOSOPHER; meal++) {
+
+		/* THINKING */
+		philosopher_state[id] = THINKING;
+		int think_time = (rand() % THINK_TIME_MAX) + 1;
+		snprintf(msg, sizeof(msg), "is THINKING for %ds...", think_time);
+		log_msg(id, msg);
+		print_state_table();
+		sleep(think_time);
+
+		/* HUNGRY: request entry to room */
+		philosopher_state[id] = HUNGRY;
+		log_msg(id, "is HUNGRY -- waiting to enter room");
+		sem_wait(&room);
+		log_msg(id, "entered the room");
+
+		/* PICK UP CHOPSTICKS */
+		/* ------------------------------------------------------------------------
+			Deadlock Prevention #2: Asymmetric Resource Sharing
+			Even philosophers: acquire LEFT chopstick first, then RIGHT.
+			Odd  philosophers: acquire RIGHT chopstick first, then LEFT.
+		------------------------------------------------------------------------ */
+		if (id % 2 == 0) {
+			/* Even philosopher: LEFT then RIGHT */
+			sem_wait(&chopstick[left]);
+			snprintf(msg, sizeof(msg), "picked up LEFT  chopstick #%d", left);
+			log_msg(id, msg);
+
+			sem_wait(&chopstick[right]);
+			snprintf(msg, sizeof(msg), "picked up RIGHT chopstick #%d", right);
+			log_msg(id, msg);
+		} else {
+			/* Odd philosopher: RIGHT then LEFT */
+			sem_wait(&chopstick[right]);
+			snprintf(msg, sizeof(msg), "picked up RIGHT chopstick #%d", right);
+			log_msg(id, msg);
+
+			sem_wait(&chopstick[left]);
+			snprintf(msg, sizeof(msg), "picked up LEFT  chopstick #%d", left);
+			log_msg(id, msg);
+		}
+
+		/* EATING */
+		philosopher_state[id] = EATING;
+		int eat_time = (rand() % EAT_TIME_MAX) + 1;
+		snprintf(msg, sizeof(msg), "is EATING meal %d/%d for %ds", meal + 1, MEALS_PER_PHILOSOPHER, eat_time);
+		log_msg(id, msg);
+		print_state_table();
+		sleep(eat_time);
+
+		/* PUT DOWN CHOPSTICKS */
+		sem_post(&chopstick[left]);
+		sem_post(&chopstick[right]);
+		log_msg(id, "put down both chopsticks");
+
+		/* LEAVE ROOM */
+		sem_post(&room);
+		log_msg(id, "left the room");
+	}
+
+	/* DONE */
+	philosopher_state[id] = DONE;
+	log_msg(id, "finished all meals and left the table");
+	print_state_table();
+
+	return NULL;
+}
+
+/* ------------ Main ------------ */
+int main(void) {
+	srand((unsigned)time(NULL));
+
+	/* Initialize all philosopher states */
+	for (int i = 0; i < NUM_PHILOSOPHERS; i++) {
+		philosopher_state[i] = THINKING;
+	}
+
+	printf("\033[1;36m");
+	printf("===========================================\n");
+	printf("  DINING PHILOSOPHERS PROBLEM\n");
+	printf("  CMSC 125 | Process Synchronization\n");
+	printf("===========================================\n");
+	printf("%s", RESET);
+	printf("  Philosophers : %d\n", NUM_PHILOSOPHERS);
+	printf("  Meals each   : %d\n", MEALS_PER_PHILOSOPHER);
+	printf("  Chopsticks   : %d\n", NUM_PHILOSOPHERS);
+	printf("  Room limit   : %d  (N-1 rule)\n", NUM_PHILOSOPHERS - 1);
+	printf("  Think range  : 1-%ds\n", THINK_TIME_MAX);
+	printf("  Eat range    : 1-%ds\n\n", EAT_TIME_MAX);
+
+	/* ------------------------------------------------------------------------
+		Deadlock Prevention #1: Room Semaphore (N-1 Rule)
+		Only N-1 philosophers can attempt to eat at the same time.
+		This guarantees at least one philosopher can always acquire both chopsticks,
+		preventing circular wait and thus deadlock.
+	------------------------------------------------------------------------ */
+	sem_init(&room, 0, NUM_PHILOSOPHERS - 1);
+	for (int i = 0; i < NUM_PHILOSOPHERS; i++) {
+		sem_init(&chopstick[i], 0, 1);
+	}
+
+	/* Create philosopher threads */
+	pthread_t threads[NUM_PHILOSOPHERS];
+	int ids[NUM_PHILOSOPHERS];
+
+	for (int i = 0; i < NUM_PHILOSOPHERS; i++) {
+		ids[i] = i;
+		if (pthread_create(&threads[i], NULL, philosopher, &ids[i]) != 0) {
+			perror("pthread_create");
+			exit(EXIT_FAILURE);
+		}
+	}
+
+	/* Wait for all philosophers to finish */
+	for (int i = 0; i < NUM_PHILOSOPHERS; i++) {
+		pthread_join(threads[i], NULL);
+	}
+
+	/* Cleanup */
+	for (int i = 0; i < NUM_PHILOSOPHERS; i++) {
+		sem_destroy(&chopstick[i]);
+	}
+	sem_destroy(&room);
+	pthread_mutex_destroy(&log_mutex);
+
+	/* Final message */
+	printf("\n\033[1;32m");
+	printf("===========================================\n");
+	printf("  All philosophers finished.\n");
+	printf("  Simulation completed without deadlock.\n");
+	printf("===========================================\n");
+	printf("%s\n", RESET);
+
+	return 0;
+}
+\end{lstlisting}
+
+\newpage
+\printbibliography
+
+\end{document}
